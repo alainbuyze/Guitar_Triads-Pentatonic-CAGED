@@ -46,7 +46,7 @@ Just open `index.html` in any modern browser — that's the whole app.
 
 ## Deployment (GitHub Pages)
 
-This repo includes a GitHub Actions workflow ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)) that **auto-deploys to GitHub Pages on every push to `main`**.
+This repo includes a GitHub Actions workflow ([`.github/workflows/deploy.yml`](.github/workflows/static.yml)) that **auto-deploys to GitHub Pages on every push to `main`**.
 
 To turn it on once: **Settings → Pages → Build and deployment → Source: GitHub Actions**. After the next push, the site is live at the demo link above.
 
