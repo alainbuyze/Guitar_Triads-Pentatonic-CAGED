@@ -27,6 +27,7 @@ The core idea: the **triad is the 3-note skeleton**, the **pentatonic box wraps 
 - **Label modes** — none, scale degrees (`1 b3 4 5 b7` / `1 2 3 5 6`), or note names.
 - **Click any triad** to isolate it, brighten its CAGED bar, outline its box, and draw its full chord.
 - Root notes are always ringed in red.
+- **Audio** — click any note dot on the fretboard to hear its pitch, hit **Play** on a triad card to strum that voicing, or **Play full chord** (shown when a triad is selected) to strum the whole barre chord. Sound can be muted with the SOUND toggle. Tones are synthesized live in the browser (Karplus-Strong plucked-string algorithm via the Web Audio API) — no audio files, no dependencies.
 
 ## How it works
 

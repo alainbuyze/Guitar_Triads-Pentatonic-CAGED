@@ -36,6 +36,13 @@ svg{display:block}
 .ld{width:11px;height:11px;border-radius:50%}
 .note{font-size:.74rem;color:#94a3b8;line-height:1.6;margin-top:10px}
 .note b{color:#e2e8f0}
+.hint{text-align:center;color:#64748b;font-size:.68rem;margin-top:6px}
+.tc .play{display:block;margin-top:8px;padding:4px 12px;border-radius:14px;font-size:.7rem;font-weight:700;border:1.5px solid currentColor;background:transparent;cursor:pointer}
+.tc .play:hover{filter:brightness(1.3)}
+#chordPlayWrap{text-align:center;margin-top:10px}
+#chordPlayWrap .play{padding:6px 18px;font-size:.78rem;font-weight:800;border:2px solid currentColor;border-radius:20px;background:transparent;cursor:pointer}
+#chordPlayWrap .play:hover{filter:brightness(1.3)}
+.note-dot{cursor:pointer}
 footer{text-align:center;color:#475569;font-size:.7rem;margin:18px 0 4px}
 footer a{color:#64748b}
 </style>
@@ -76,7 +83,12 @@ footer a{color:#64748b}
       <button class="btn mini on" data-lm="note">Notes</button>
     </span>
   </div>
+  <div class="ctrls">
+    <span class="lab">SOUND:</span>
+    <button class="btn mini on" id="soundBtn">On</button>
+  </div>
   <div class="fbwrap"><svg id="fb"></svg></div>
+  <p class="hint">Click any note on the fretboard to hear it</p>
   <div class="legend">
     <div class="li"><div class="ld" style="background:#fbbf24"></div>Root position</div>
     <div class="li"><div class="ld" style="background:#22c55e"></div>1st inversion</div>
@@ -84,6 +96,7 @@ footer a{color:#64748b}
     <div class="li"><div class="ld" style="border:2px solid #ef4444;background:transparent"></div>Root note</div>
     <div class="li"><div class="ld" style="background:#475569"></div>Pentatonic note</div>
   </div>
+  <div id="chordPlayWrap"></div>
   <div class="tri-cards" id="cards"></div>
 </div>
 
@@ -97,6 +110,7 @@ footer a{color:#64748b}
 
 <script>
 const OPEN=[4,9,2,7,11,4];
+const OPEN_MIDI=[40,45,50,55,59,64];
 const SNAMES=['E','A','D','G','B','e'];
 const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const SHAPE={1:'E shape',2:'D shape',3:'C shape',4:'A shape',5:'G shape'};
@@ -138,7 +152,7 @@ function whichBox(tri,copies){
 function pickBox(tri,copies){
   const h=whichBox(tri,copies); if(!h.length) return null;
   const c=tri.reduce((a,n)=>a+n[1],0)/tri.length;
-  h.sort((x,y)=>(Math.abs(x.center-c)-Math.abs(y.center-c))||(x.N-y.N));
+  h.sort((x,y)=>((y.hi-y.lo)-(x.hi-x.lo))||(Math.abs(x.center-c)-Math.abs(y.center-c))||(x.N-y.N));
   return h[0];
 }
 function enumTriads(setKey,R,q){
@@ -162,7 +176,7 @@ function enumTriads(setKey,R,q){
 
 let ST={root:9,q:'minor',set:'top',sel:null,lm:'note',show:{penta:true,caged:true,box:true,chord:true}};
 
-const LP=48,FW=52,SH=30,FRETS=15;
+const LP=58,FW=52,SH=30,FRETS=15;
 let TP=66;
 function xf(f){return f===0?(LP-16):(LP+(f-0.5)*FW);}
 function yr(row){return TP+row*SH;}
@@ -172,10 +186,58 @@ function isRoot(s,f){return ivl(s,f,ST.root)===0;}
 function isPenta(s,f){return penta(ST.q).includes(ivl(s,f,ST.root));}
 function inLabel(s,f){ if(ST.lm==='none')return ''; if(ST.lm==='deg')return DEGNAME[ST.q][ivl(s,f,ST.root)]||''; return NOTE[(OPEN[s]+f)%12]; }
 
-function dot(x,y,r,fill,txt,txtcol,root,op){
-  let g=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" opacity="${op}"/>`;
-  if(root) g+=`<circle cx="${x}" cy="${y}" r="${r+2.5}" fill="none" stroke="#ef4444" stroke-width="2.2" opacity="${op}"/>`;
-  if(txt) g+=`<text x="${x}" y="${y+3}" text-anchor="middle" font-size="${txt.length>1?7.5:8.5}" font-weight="800" fill="${txtcol}" opacity="${op}">${txt}</text>`;
+const Synth=(()=>{
+  let ctx=null,muted=false;
+  function ensure(){ if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)(); if(ctx.state==='suspended') ctx.resume(); return ctx; }
+  function karplus(freq,dur,sr){
+    const N=Math.max(2,Math.round(sr/freq)),total=Math.round(dur*sr);
+    const buf=new Float32Array(total),ring=new Float32Array(N);
+    for(let i=0;i<N;i++) ring[i]=Math.random()*2-1;
+    let idx=0;
+    for(let i=0;i<total;i++){
+      const nv=(ring[idx]+ring[(idx+1)%N])*0.5*0.995;
+      buf[i]=ring[idx]; ring[idx]=nv; idx=(idx+1)%N;
+    }
+    return buf;
+  }
+  function pluck(freq,when=0,gainVal=0.35){
+    if(muted) return;
+    const c=ensure(),dur=1.4,data=karplus(freq,dur,c.sampleRate);
+    const buffer=c.createBuffer(1,data.length,c.sampleRate);
+    buffer.copyToChannel(data,0);
+    const src=c.createBufferSource(); src.buffer=buffer;
+    const gain=c.createGain(),t0=c.currentTime+when;
+    gain.gain.setValueAtTime(gainVal,t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    src.connect(gain).connect(c.destination);
+    src.start(t0); src.stop(t0+dur+0.05);
+  }
+  function strum(freqs,stagger=0.045){ freqs.forEach((f,i)=>pluck(f,i*stagger)); }
+  function toggleMute(){ muted=!muted; return muted; }
+  return {pluck,strum,toggleMute,isMuted:()=>muted};
+})();
+function freqOf(s,f){ return 440*Math.pow(2,(OPEN_MIDI[s]+f-69)/12); }
+function flashDot(s,f){
+  const svg=document.getElementById('fb');
+  const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  c.setAttribute('cx',xf(f)); c.setAttribute('cy',yr(s2row(s)));
+  c.setAttribute('fill','none'); c.setAttribute('stroke','#ffffff'); c.setAttribute('stroke-width','2'); c.setAttribute('pointer-events','none');
+  svg.appendChild(c);
+  const t0=performance.now();
+  function step(t){
+    const dt=(t-t0)/380;
+    if(dt>=1||!c.isConnected){ if(c.parentNode) c.parentNode.removeChild(c); return; }
+    c.setAttribute('r',11+dt*11);
+    c.setAttribute('opacity',(0.9*(1-dt)).toFixed(2));
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function playNote(s,f){ Synth.pluck(freqOf(s,f)); flashDot(s,f); }
+function dot(x,y,r,fill,txt,txtcol,root,op,s,f){
+  let g=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" opacity="${op}" class="note-dot" data-s="${s}" data-f="${f}"/>`;
+  if(root) g+=`<circle cx="${x}" cy="${y}" r="${r+2.5}" fill="none" stroke="#ef4444" stroke-width="2.2" opacity="${op}" pointer-events="none"/>`;
+  if(txt) g+=`<text x="${x}" y="${y+3}" text-anchor="middle" font-size="${txt.length>1?7.5:8.5}" font-weight="800" fill="${txtcol}" opacity="${op}" pointer-events="none">${txt}</text>`;
   return g;
 }
 function fullChord(tri){
@@ -236,7 +298,7 @@ function render(){
   for(let r=0;r<6;r++){
     const y=yr(r);
     s+=`<line x1="${LP}" y1="${y}" x2="${LP+FRETS*FW}" y2="${y}" stroke="#475569" stroke-width="${0.5+r*0.25}"/>`;
-    s+=`<text x="${LP-28}" y="${y+4}" font-size="12" fill="#94a3b8" font-weight="700">${SNAMES[5-r]}</text>`;
+    s+=`<text x="${LP-38}" y="${y+4}" text-anchor="end" font-size="12" fill="#94a3b8" font-weight="700">${SNAMES[5-r]}</text>`;
   }
   s+=`<rect x="${LP-4}" y="${TP-6}" width="5" height="${5*SH+12}" fill="#d97706" rx="1"/>`;
   for(let f=1;f<=FRETS;f++){const x=LP+f*FW;s+=`<line x1="${x}" y1="${TP-6}" x2="${x}" y2="${TP+5*SH+6}" stroke="#334155" stroke-width="1.5"/>`;}
@@ -244,7 +306,7 @@ function render(){
   if(ST.show.penta){
     for(let si=0;si<6;si++)for(let f=0;f<=FRETS;f++){
       if(!isPenta(si,f))continue;
-      s+=dot(xf(f),yr(s2row(si)),ST.lm==='none'?7:9,'#334155',inLabel(si,f),'#cbd5e1',isRoot(si,f),0.9);
+      s+=dot(xf(f),yr(s2row(si)),ST.lm==='none'?7:9,'#334155',inLabel(si,f),'#cbd5e1',isRoot(si,f),0.9,si,f);
     }
   }
   if(ST.show.box && ST.sel!==null && TRIS[ST.sel].bw){
@@ -256,18 +318,29 @@ function render(){
   if(ST.show.chord && ST.sel!==null && TRIS[ST.sel].bw){
     const t=TRIS[ST.sel],rep=fullChord(t),pts=rep.map(([si,f])=>[xf(f),yr(s2row(si))]);
     s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${t.color}" stroke-width="1.6" stroke-dasharray="3,4" opacity=".7"/>`;
-    rep.forEach(([si,f,isTri])=>{ if(isTri)return; s+=dot(xf(f),yr(s2row(si)),9,t.color,inLabel(si,f),'#0f172a',isRoot(si,f),0.32); });
+    rep.forEach(([si,f,isTri])=>{ if(isTri)return; s+=dot(xf(f),yr(s2row(si)),9,t.color,inLabel(si,f),'#0f172a',isRoot(si,f),0.32,si,f); });
   }
   TRIS.forEach((t,i)=>{
     const active=ST.sel===null||ST.sel===i,op=active?1:0.14;
     const pts=t.notes.map(([si,f])=>[xf(f),yr(s2row(si))]);
     for(let k=0;k<pts.length-1;k++)
       s+=`<line x1="${pts[k][0]}" y1="${pts[k][1]}" x2="${pts[k+1][0]}" y2="${pts[k+1][1]}" stroke="${t.color}" stroke-width="2.4" opacity="${op*0.55}"/>`;
-    t.notes.forEach(([si,f])=>{ s+=dot(xf(f),yr(s2row(si)),11,t.color,inLabel(si,f),'#0f172a',isRoot(si,f),op); });
+    t.notes.forEach(([si,f])=>{ s+=dot(xf(f),yr(s2row(si)),11,t.color,inLabel(si,f),'#0f172a',isRoot(si,f),op,si,f); });
   });
 
   svg.innerHTML=s;
-  renderCards();renderExplain();
+  renderCards();renderExplain();updateChordPlay();
+}
+
+function updateChordPlay(){
+  const w=document.getElementById('chordPlayWrap');
+  if(ST.sel!==null && ST.show.chord && TRIS[ST.sel] && TRIS[ST.sel].bw){
+    const t=TRIS[ST.sel];
+    w.innerHTML=`<button class="play" style="color:${t.color}" id="playChordBtn">Play full chord</button>`;
+    document.getElementById('playChordBtn').addEventListener('click',()=>{
+      Synth.strum(fullChord(t).map(([si,f])=>freqOf(si,f)));
+    });
+  } else w.innerHTML='';
 }
 
 function renderCards(){
@@ -279,9 +352,15 @@ function renderCards(){
       <div class="meta">${t.label} · frets ${t.frets.join('-')}</div>
       <span class="tag" style="background:${t.color}22;color:${t.color}">${t.box?'Box '+t.box:'—'}</span>
       <span class="tag" style="background:#475569;color:#cbd5e1">${t.zone}</span>
+      <button class="play" style="color:${t.color}" data-play="${i}">Play</button>
     </div>`;
   }).join('');
   c.querySelectorAll('.tc').forEach(el=>el.addEventListener('click',()=>{const i=+el.dataset.i;ST.sel=ST.sel===i?null:i;render();}));
+  c.querySelectorAll('[data-play]').forEach(btn=>btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    const i=+btn.dataset.play;
+    Synth.strum(TRIS[i].notes.map(([si,f])=>freqOf(si,f)));
+  }));
 }
 function renderExplain(){
   const rn=NOTE[ST.root];
@@ -303,6 +382,15 @@ document.querySelectorAll('[data-q]').forEach(b=>b.addEventListener('click',()=>
 document.querySelectorAll('[data-set]').forEach(b=>b.addEventListener('click',()=>{ST.set=b.dataset.set;ST.sel=null;document.querySelectorAll('[data-set]').forEach(x=>x.classList.toggle('on',x===b));render();}));
 document.querySelectorAll('[data-t]').forEach(b=>b.addEventListener('click',()=>{const t=b.dataset.t;ST.show[t]=!ST.show[t];b.classList.toggle('on');render();}));
 document.querySelectorAll('[data-lm]').forEach(b=>b.addEventListener('click',()=>{ST.lm=b.dataset.lm;document.querySelectorAll('[data-lm]').forEach(x=>x.classList.toggle('on',x===b));render();}));
+document.getElementById('soundBtn').addEventListener('click',function(){
+  const m=Synth.toggleMute();
+  this.textContent=m?'Off':'On';
+  this.classList.toggle('on',!m);
+});
+document.getElementById('fb').addEventListener('click',e=>{
+  const t=e.target;
+  if(t.classList && t.classList.contains('note-dot')) playNote(+t.dataset.s,+t.dataset.f);
+});
 render();
 </script>
 </body>
