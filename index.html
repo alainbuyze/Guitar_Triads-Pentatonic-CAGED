@@ -191,28 +191,33 @@ const Synth=(()=>{
   function ensure(){ if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)(); if(ctx.state==='suspended') ctx.resume(); return ctx; }
   function karplus(freq,dur,sr){
     const N=Math.max(2,Math.round(sr/freq)),total=Math.round(dur*sr);
-    const buf=new Float32Array(total),ring=new Float32Array(N);
-    for(let i=0;i<N;i++) ring[i]=Math.random()*2-1;
+    const buf=new Float32Array(total),ring=new Float32Array(N),raw=new Float32Array(N);
+    for(let i=0;i<N;i++) raw[i]=Math.random()*2-1;
+    // smooth the excitation burst (fingertip-on-nylon attack instead of a bright pick click)
+    for(let i=0;i<N;i++) ring[i]=(raw[i]+raw[(i+1)%N]+raw[(i+2)%N])/3;
     let idx=0;
+    const decay=0.9965; // longer, mellower sustain
     for(let i=0;i<total;i++){
-      const nv=(ring[idx]+ring[(idx+1)%N])*0.5*0.995;
+      const nv=(ring[idx]+ring[(idx+1)%N])*0.5*decay;
       buf[i]=ring[idx]; ring[idx]=nv; idx=(idx+1)%N;
     }
     return buf;
   }
   function pluck(freq,when=0,gainVal=0.35){
     if(muted) return;
-    const c=ensure(),dur=1.4,data=karplus(freq,dur,c.sampleRate);
+    const c=ensure(),dur=1.9,data=karplus(freq,dur,c.sampleRate);
     const buffer=c.createBuffer(1,data.length,c.sampleRate);
     buffer.copyToChannel(data,0);
     const src=c.createBufferSource(); src.buffer=buffer;
+    const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=3200; lp.Q.value=0.6;
+    const body=c.createBiquadFilter(); body.type='peaking'; body.frequency.value=160; body.Q.value=1; body.gain.value=4;
     const gain=c.createGain(),t0=c.currentTime+when;
     gain.gain.setValueAtTime(gainVal,t0);
     gain.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
-    src.connect(gain).connect(c.destination);
+    src.connect(lp).connect(body).connect(gain).connect(c.destination);
     src.start(t0); src.stop(t0+dur+0.05);
   }
-  function strum(freqs,stagger=0.045){ freqs.forEach((f,i)=>pluck(f,i*stagger)); }
+  function strum(freqs,stagger=0.11){ freqs.forEach((f,i)=>pluck(f,i*stagger)); }
   function toggleMute(){ muted=!muted; return muted; }
   return {pluck,strum,toggleMute,isMuted:()=>muted};
 })();
