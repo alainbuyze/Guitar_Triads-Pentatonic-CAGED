@@ -282,10 +282,22 @@ function dot(x,y,r,fill,txt,txtcol,root,op,s,f){
 }
 function fullChord(tri){
   const map={};tri.notes.forEach(([s,f])=>map[s]=f);
+  // borrow notes from any other string-set's triad that lands in this exact same box (same
+  // shape, same fret window) -- guarantees the full chord agrees with the app's own triads
+  // instead of independently guessing, so adjacent string-sets always tell the same story
+  const borrowed={};
+  for(const setKey of ['top','mid','s3','low']){
+    for(const o of enumTriads(setKey,ST.root,ST.q)){
+      if(o.shapeBox===tri.shapeBox && o.bw && o.bw[0]===tri.bw[0] && o.bw[1]===tri.bw[1]){
+        o.notes.forEach(([s,f])=>{ if(!(s in map) && !(s in borrowed)) borrowed[s]=f; });
+      }
+    }
+  }
   const ct=triadiv(ST.q).map(x=>(ST.root+x)%12);
   const center=tri.notes.reduce((a,n)=>a+n[1],0)/tri.notes.length, rep=[];
   for(let s=0;s<6;s++){
     if(s in map){rep.push([s,map[s],true]);continue;}
+    if(s in borrowed){rep.push([s,borrowed[s],false]);continue;}
     let best=null;
     for(let f=tri.bw[0];f<=tri.bw[1];f++){ if(ct.includes((OPEN[s]+f)%12)){ if(best===null||Math.abs(f-center)<Math.abs(best-center)) best=f; } }
     if(best!==null) rep.push([s,best,false]);
