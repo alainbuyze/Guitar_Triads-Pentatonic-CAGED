@@ -1,6 +1,6 @@
 # Guitar: Triads → Pentatonic Boxes → CAGED
 
-An interactive guitar-fretboard tool that shows how **triads**, **pentatonic boxes**, and the **CAGED system** are the same shapes viewed at different levels of detail — for any root note, in major, minor, sus2, sus4, augmented, or diminished.
+An interactive guitar-fretboard tool that shows how **triads**, **pentatonic boxes**, and the **CAGED system** are the same shapes viewed at different levels of detail — for any root note, in major, minor, sus2, sus4, aug, dim, maj7, dom7, or min7 (shell voicings).
 
 It's a single self-contained `index.html` file: no build step, no dependencies, no network calls. Open it in a browser and it runs.
 
@@ -21,10 +21,12 @@ The core idea: the **triad is the 3-note skeleton**, the **pentatonic box wraps 
 ## Features
 
 - **Root selector** — all 12 chromatic roots.
-- **Quality toggle** — minor, major, sus2, sus4, augmented, or diminished (switches triad tones, pentatonic, and degree labels). Sus2 and sus4 are proper subsets of the major/minor pentatonic scale respectively, so they get the full pentatonic-box/CAGED-shape treatment like major and minor. Augmented and diminished don't map onto any standard CAGED shape or pentatonic scale, so for those two the overlay is hidden and only the three inversions (still fully clickable and playable) are shown.
+- **Quality toggle** — minor, major, sus2, sus4, aug, dim, maj7, dom7, min7 (switches triad tones, pentatonic, and degree labels). Sus2, sus4, and min7 are proper subsets of the major/minor pentatonic scale, so they get the full pentatonic-box/CAGED-shape treatment like major and minor. Augmented, diminished, maj7, and dom7 don't map onto any standard CAGED shape or pentatonic scale, so for those the overlay is hidden and only the three voicings (still fully clickable and playable) are shown.
+- **Shell voicings** (maj7, dom7, min7) — stripped-down 7th chords using only the root, 3rd, and 7th (the 5th is dropped). These are the guide-tone voicings used for jazz/blues comping, still built from only 3 notes so they fit the same engine as the triads. Min7 shells happen to be a full subset of the minor pentatonic scale, so — unlike maj7/dom7 shells — they get boxes and CAGED shapes just like an ordinary minor chord.
 - **String-set selector** — Top 3 (G-B-e), Middle 3 (D-G-B), A-D-G, Low 3 (E-A-D). Together these surface all five CAGED shapes.
 - **Layer toggles** — pentatonic dots, CAGED shape bars, active box outline, full-chord overlay.
 - **Label modes** — none, scale degrees (`1 b3 4 5 b7` / `1 2 3 5 6`), or note names.
+- **Sharps/flats toggle** — display all note names (root selector, fretboard, card labels) with sharps or flats. A simple global preference rather than automatic per-key spelling — proper enharmonic spelling depends on the root's position on the circle of fifths (not the quality), which is out of scope for this toggle.
 - **Click any triad** to isolate it, brighten its CAGED bar, outline its box, and draw its full chord.
 - Root notes are always ringed in red.
 - **Audio** — click any note dot on the fretboard to hear its pitch, hit **Play** on a triad card to strum that voicing, or **Play full chord** (shown when a triad is selected) to strum the whole barre chord. Sound can be muted with the SOUND toggle. Tones are synthesized live in the browser (Karplus-Strong plucked-string algorithm via the Web Audio API) — no audio files, no dependencies.
@@ -36,7 +38,7 @@ Everything is computed from music-theory first principles at render time — not
 
 1. **Pentatonic** = scale intervals above the root (`0 3 5 7 10` minor, `0 2 4 7 9` major) mapped onto standard tuning `E A D G B e`.
 2. **Boxes** are built with an anchor-window method: for box *N*, the anchor is the *N*-th pentatonic degree on the low E string, and the box is every pentatonic note within a 4-fret window of that anchor. This reproduces the five standard positions and bounds each box cleanly.
-3. **Triads** are found by brute-force search for compact voicings of the three chord tones on each string set, then each is assigned to the widest pentatonic box that contains all three of its notes (falling back to the closest-centered one only among equally-wide candidates, so a genuine box always wins over a sliver left over at the edge of the neck).
+3. **Triads** are found by brute-force search for compact voicings of the three chord tones on each string set, then each is assigned to the widest pentatonic box that contains all three of its notes (falling back to the closest-centered one only among equally-wide candidates, so a genuine box always wins over a sliver left over at the edge of the neck). When a wide-interval quality (sus2, sus4, or a shell voicing) admits two equally compact arrangements sharing the same bass note, only the tighter one is kept, so each inversion shows once.
 
 ### A note on box numbering in major keys
 

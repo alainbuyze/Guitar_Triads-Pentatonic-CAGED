@@ -16,6 +16,7 @@ h1{text-align:center;font-size:1.5rem;font-weight:800;background:linear-gradient
 .sec-title::before{content:'';width:3px;height:14px;background:#22d3ee;border-radius:2px}
 .ctrls{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
 .ctrls .lab{font-size:.74rem;color:#ffffff;font-weight:700;margin-right:2px;min-width:72px}
+.ctrls .grp{display:inline-flex;align-items:center;gap:6px}
 .ctrls button.btn{padding:5px 12px;border-radius:20px;font-size:.75rem;font-weight:700;cursor:pointer;border:2px solid #475569;background:transparent;color:#cbd5e1;transition:all .15s}
 .ctrls button.btn.on{border-color:#22c55e;background:rgba(34,197,94,.14);color:#22c55e}
 .ctrls button.btn.mini{padding:4px 9px;font-size:.72rem}
@@ -61,8 +62,11 @@ footer a{color:#64748b}
       <button class="btn mini" data-q="major">major</button>
       <button class="btn mini" data-q="sus2">sus2</button>
       <button class="btn mini" data-q="sus4">sus4</button>
-      <button class="btn mini" data-q="aug">augmented</button>
-      <button class="btn mini" data-q="dim">diminished</button>
+      <button class="btn mini" data-q="aug">aug</button>
+      <button class="btn mini" data-q="dim">dim</button>
+      <button class="btn mini" data-q="maj7">maj7</button>
+      <button class="btn mini" data-q="dom7">dom7</button>
+      <button class="btn mini" data-q="min7">min7</button>
     </span>
   </div>
   <div class="ctrls">
@@ -80,12 +84,17 @@ footer a{color:#64748b}
     <button class="btn mini on" data-t="chord">Full chord</button>
   </div>
   <div class="ctrls">
-    <span class="lab">LABELS:</span>
+    <span class="grp"><span class="lab">LABELS:</span>
     <span class="seg">
       <button class="btn mini" data-lm="none">•</button>
       <button class="btn mini" data-lm="deg">Degrees</button>
       <button class="btn mini on" data-lm="note">Notes</button>
-    </span>
+    </span></span>
+    <span class="grp"><span class="lab">NOTES:</span>
+    <span class="seg">
+      <button class="btn mini on" data-acc="sharp">Sharps ♯</button>
+      <button class="btn mini" data-acc="flat">Flats ♭</button>
+    </span></span>
   </div>
   <div class="ctrls">
     <span class="lab">SOUND:</span>
@@ -117,22 +126,27 @@ const OPEN=[4,9,2,7,11,4];
 const OPEN_MIDI=[40,45,50,55,59,64];
 const SNAMES=['E','A','D','G','B','e'];
 const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const NOTE_FLAT=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+function noteName(pc){ return (ST.acc==='flat'?NOTE_FLAT:NOTE)[((pc%12)+12)%12]; }
 const SHAPE={1:'E shape',2:'D shape',3:'C shape',4:'A shape',5:'G shape'};
 const SHAPECOL={'A shape':'#a78bfa','G shape':'#2dd4bf','E shape':'#f43f5e','D shape':'#f59e0b','C shape':'#38bdf8'};
 const IC={Root:'#fbbf24','1st':'#22c55e','2nd':'#38bdf8'};
 const SETSTR={top:[3,4,5],mid:[2,3,4],s3:[1,2,3],low:[0,1,2]};
 const SETNAME={top:'Top 3 strings (G-B-e)',mid:'Middle 3 strings (D-G-B)',s3:'A-D-G strings',low:'Low 3 strings (E-A-D)'};
-const TRIADIV={minor:[0,3,7],major:[0,4,7],aug:[0,4,8],dim:[0,3,6],sus2:[0,2,7],sus4:[0,5,7]};
-const DEGNAME={minor:{0:'1',3:'b3',5:'4',7:'5',10:'b7'},major:{0:'1',2:'2',4:'3',7:'5',9:'6'},aug:{0:'1',4:'3',8:'#5'},dim:{0:'1',3:'b3',6:'b5'}};
-DEGNAME.sus2=DEGNAME.major; DEGNAME.sus4=DEGNAME.minor;
-const QNAME={minor:'minor',major:'major',aug:'augmented',dim:'diminished',sus2:'sus2',sus4:'sus4'};
+const TRIADIV={minor:[0,3,7],major:[0,4,7],aug:[0,4,8],dim:[0,3,6],sus2:[0,2,7],sus4:[0,5,7],maj7:[0,4,11],dom7:[0,4,10],min7:[0,3,10]};
+const DEGNAME={minor:{0:'1',3:'b3',5:'4',7:'5',10:'b7'},major:{0:'1',2:'2',4:'3',7:'5',9:'6'},aug:{0:'1',4:'3',8:'#5'},dim:{0:'1',3:'b3',6:'b5'},maj7:{0:'1',4:'3',11:'7'},dom7:{0:'1',4:'3',10:'b7'}};
+DEGNAME.sus2=DEGNAME.major; DEGNAME.sus4=DEGNAME.minor; DEGNAME.min7=DEGNAME.minor;
+const QNAME={minor:'minor',major:'major',aug:'augmented',dim:'diminished',sus2:'sus2',sus4:'sus4',maj7:'maj7',dom7:'dom7',min7:'min7'};
+// qualities whose 3 notes are a full subset of the (major or minor) pentatonic scale get the box/CAGED overlay
+function hasCagedFramework(q){return q==='minor'||q==='major'||q==='sus2'||q==='sus4'||q==='min7';}
+// qualities anchored directly on the minor pentatonic at their own root (no relative-minor detour needed)
+function directMinorAnchor(q){return q==='minor'||q==='sus4'||q==='min7';}
 
-function penta(q){return (q==='minor'||q==='dim'||q==='sus4')?[0,3,5,7,10]:[0,2,4,7,9];}
+function penta(q){return (q==='minor'||q==='dim'||q==='sus4'||q==='min7')?[0,3,5,7,10]:[0,2,4,7,9];}
 function triadiv(q){return TRIADIV[q];}
-function hasCagedFramework(q){return q==='minor'||q==='major'||q==='sus2'||q==='sus4';}
 function ivl(s,f,R){return ((OPEN[s]+f-R)%12+12)%12;}
 function isPentaG(s,f,R,q){return penta(q).includes(ivl(s,f,R));}
-function minorRootOf(R,q){return (q==='minor'||q==='sus4')?R:((R-3)%12+12)%12;}
+function minorRootOf(R,q){return directMinorAnchor(q)?R:((R-3)%12+12)%12;}
 
 function boxCopies(N,R,q){
   const P=penta(q), anchorIv=P[(N-1)%5], out=[];
@@ -166,7 +180,7 @@ function pickBox(tri,copies){
 function enumTriads(setKey,R,q){
   const strs=SETSTR[setKey], ti=triadiv(q).map(x=>(R+x)%12), ts=[...ti].sort((a,b)=>a-b);
   const invMap={}; invMap[ti[0]]='Root';invMap[ti[1]]='1st';invMap[ti[2]]='2nd';
-  const majC=allCopies(R,q), mR=minorRootOf(R,q), minC=(q==='minor'||q==='sus4')?majC:allCopies(mR,'minor');
+  const majC=allCopies(R,q), mR=minorRootOf(R,q), minC=directMinorAnchor(q)?majC:allCopies(mR,'minor');
   const out=[];
   for(let a=0;a<16;a++)for(let b=0;b<16;b++)for(let c=0;c<16;c++){
     const combo=[a,b,c], pcs=combo.map((f,i)=>(OPEN[strs[i]]+f)%12), ps=[...pcs].sort((x,y)=>x-y);
@@ -175,14 +189,22 @@ function enumTriads(setKey,R,q){
     const tri=combo.map((f,i)=>[strs[i],f]);
     const maj=pickBox(tri,majC), mn=pickBox(tri,minC);
     const shapeBox=maj?maj.N:null;
-    const label=strs.map((s,i)=>NOTE[(OPEN[s]+combo[i])%12]).join('-');
+    const label=strs.map((s,i)=>noteName(OPEN[s]+combo[i])).join('-');
     out.push({notes:tri,inv:invMap[pcs[0]],color:IC[invMap[pcs[0]]],box:mn?mn.N:null,shapeBox,zone:shapeBox?SHAPE[shapeBox]:'?',bw:maj?[maj.lo,maj.hi]:null,label,frets:combo});
   }
-  out.sort((x,y)=>x.frets[0]-y.frets[0]||x.frets[1]-y.frets[1]);
-  return out;
+  // wide-interval qualities (sus2/sus4/shells) can find two compact arrangements that share
+  // the same bass note, differing only in which upper note sits on top; keep just the tighter one
+  const bestByBass=new Map();
+  for(const t of out){
+    const key=t.inv+'|'+t.frets[0], span=Math.max(...t.frets)-Math.min(...t.frets);
+    if(!bestByBass.has(key) || span<bestByBass.get(key).span) bestByBass.set(key,{t,span});
+  }
+  const deduped=[...bestByBass.values()].map(v=>v.t);
+  deduped.sort((x,y)=>x.frets[0]-y.frets[0]||x.frets[1]-y.frets[1]);
+  return deduped;
 }
 
-let ST={root:9,q:'minor',set:'top',sel:null,lm:'note',show:{penta:true,caged:true,box:true,chord:true}};
+let ST={root:9,q:'minor',set:'top',sel:null,lm:'note',acc:'sharp',show:{penta:true,caged:true,box:true,chord:true}};
 
 const LP=58,FW=52,SH=30,FRETS=15;
 let TP=66;
@@ -192,7 +214,7 @@ function s2row(si){return 5-si;}
 function spanX(a,b){return [Math.max(LP-32, LP+(a-1)*FW), LP+b*FW];}
 function isRoot(s,f){return ivl(s,f,ST.root)===0;}
 function isPenta(s,f){return penta(ST.q).includes(ivl(s,f,ST.root));}
-function inLabel(s,f){ if(ST.lm==='none')return ''; if(ST.lm==='deg')return DEGNAME[ST.q][ivl(s,f,ST.root)]||''; return NOTE[(OPEN[s]+f)%12]; }
+function inLabel(s,f){ if(ST.lm==='none')return ''; if(ST.lm==='deg')return DEGNAME[ST.q][ivl(s,f,ST.root)]||''; return noteName(OPEN[s]+f); }
 
 const Synth=(()=>{
   let ctx=null,muted=false;
@@ -285,7 +307,7 @@ function render(){
   const selShape = ST.sel!==null?TRIS[ST.sel].shapeBox:null;
   const selCen = ST.sel!==null&&TRIS[ST.sel].bw?(TRIS[ST.sel].bw[0]+TRIS[ST.sel].bw[1])/2:-99;
 
-  document.getElementById('sub').innerHTML=`Where the shapes live on the neck — <b>${NOTE[ST.root]} ${QNAME[ST.q]}</b> · pick any root &amp; quality; slide the shapes for other keys`;
+  document.getElementById('sub').innerHTML=`Where the shapes live on the neck — <b>${noteName(ST.root)} ${QNAME[ST.q]}</b> · pick any root &amp; quality; slide the shapes for other keys`;
   const svg=document.getElementById('fb');
   const W=LP+FRETS*FW+24, H=TP+5*SH+40;
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('width',W);svg.setAttribute('height',H);
@@ -377,31 +399,44 @@ function renderCards(){
   }));
 }
 function renderExplain(){
-  const rn=NOTE[ST.root], qn=QNAME[ST.q];
+  const rn=noteName(ST.root), qn=QNAME[ST.q];
+  const isShell = ST.q==='maj7'||ST.q==='dom7'||ST.q==='min7';
+  const notesStr = triadiv(ST.q).map(x=>noteName(ST.root+x)).join('-');
   if(!hasCagedFramework(ST.q)){
-    const symNote = ST.q==='aug'
-      ? `Its three notes (${triadiv('aug').map(x=>NOTE[(ST.root+x)%12]).join('-')}) are stacked in equal major thirds, so the shape is perfectly symmetrical — the same shape repeats every 4 frets for a different augmented triad.`
-      : `Its three notes (${triadiv('dim').map(x=>NOTE[(ST.root+x)%12]).join('-')}) stack a minor third and another minor third.`;
+    let note;
+    if(ST.q==='aug') note = `Its three notes (${notesStr}) are stacked in equal major thirds, so the shape is perfectly symmetrical — the same shape repeats every 4 frets for a different augmented triad.`;
+    else if(ST.q==='dim') note = `Its three notes (${notesStr}) stack a minor third and another minor third.`;
+    else note = `This is a <b>shell voicing</b>: a stripped-down 7th chord using only the root, 3rd, and 7th (${notesStr}) — the 5th is dropped since it adds little to the chord's identity. Shells are the guide-tone voicings jazz and blues players use for compact, mobile comping, usually low on the neck.`;
+    const label = isShell ? `${qn} shells` : `${qn} triads`;
     document.getElementById('explain').innerHTML=
-      `<b>${rn} ${qn} · ${SETNAME[ST.set]}.</b> ${qn[0].toUpperCase()+qn.slice(1)} triads don't have a standard open-chord CAGED shape or a matching pentatonic scale the way major and minor do, so the pentatonic/CAGED overlay is hidden here. ${symNote}
+      `<b>${rn} ${qn} · ${SETNAME[ST.set]}.</b> ${label[0].toUpperCase()+label.slice(1)} don't have a standard open-chord CAGED shape or a matching pentatonic scale the way major and minor do, so the pentatonic/CAGED overlay is hidden here. ${note}
       <br><br>
       <b>Click a triad</b> to isolate it, or hit <b>Play</b> on any card to hear it. Red rings mark the <b>root</b>; toggle <b>Labels</b> for scale degrees or note names.`;
     return;
   }
-  const majNote = (ST.q==='major'||ST.q==='sus2') ? `<br><br><b>${ST.q==='sus2'?'Sus2':'Major'}-key note:</b> the pentatonic box number is counted from the shared pentatonic shape (the relative minor, ${NOTE[minorRootOf(ST.root,'major')]} minor), so boxes stay the same as that minor key. The CAGED <b>shape</b> follows the actual ${rn} ${qn} chord — so here, box number and shape sit one position apart (e.g. the E-shape barre lives in box 2).` : '';
+  const majNote = (ST.q==='major'||ST.q==='sus2') ? `<br><br><b>${ST.q==='sus2'?'Sus2':'Major'}-key note:</b> the pentatonic box number is counted from the shared pentatonic shape (the relative minor, ${noteName(minorRootOf(ST.root,'major'))} minor), so boxes stay the same as that minor key. The CAGED <b>shape</b> follows the actual ${rn} ${qn} chord — so here, box number and shape sit one position apart (e.g. the E-shape barre lives in box 2).` : '';
+  const shellNote = ST.q==='min7' ? `<br><br><b>Shell-voicing note:</b> this is a stripped-down 7th chord (root-b3-b7, the 5th omitted) rather than a full triad — but its notes are a subset of the minor pentatonic, so it sits inside the same boxes and shapes as an ordinary minor chord.` : '';
+  const chordWord = isShell ? 'shell voicing' : `${qn} triad`;
   document.getElementById('explain').innerHTML=
     `<b>${rn} ${qn} · ${SETNAME[ST.set]}.</b> The five CAGED bars up top show every shape across the neck. Change ROOT or QUALITY and the whole system recomputes for that key.
     <br><br>
-    <b>Click a triad</b> to isolate it: its CAGED bar brightens, the dashed box shows its pentatonic position, and the dotted line traces the <b>full chord</b> (every chord tone in that box across all six strings). Red rings mark the <b>root</b>. Toggle <b>Labels</b> for scale degrees or note names. The ${qn} triad (${triadiv(ST.q).map(x=>NOTE[(ST.root+x)%12]).join('-')}) is the skeleton; the pentatonic wraps two extra tones around it.${majNote}`;
+    <b>Click a triad</b> to isolate it: its CAGED bar brightens, the dashed box shows its pentatonic position, and the dotted line traces the <b>full chord</b> (every chord tone in that box across all six strings). Red rings mark the <b>root</b>. Toggle <b>Labels</b> for scale degrees or note names. The ${chordWord} (${notesStr}) is the skeleton; the pentatonic wraps two extra tones around it.${majNote}${shellNote}`;
 }
 
 const rr=document.getElementById('rootRow');
-NOTE.forEach((n,i)=>{
+for(let i=0;i<12;i++){
   const b=document.createElement('button');
-  b.className='btn mini root'+(i===9?' on':''); b.dataset.root=i; b.textContent=n;
+  b.className='btn mini root'+(i===9?' on':''); b.dataset.root=i; b.textContent=noteName(i);
   b.addEventListener('click',()=>{ST.root=i;ST.sel=null;rr.querySelectorAll('[data-root]').forEach(x=>x.classList.toggle('on',x===b));render();});
   rr.appendChild(b);
-});
+}
+function refreshRootLabels(){ rr.querySelectorAll('[data-root]').forEach(b=>{ b.textContent=noteName(+b.dataset.root); }); }
+document.querySelectorAll('[data-acc]').forEach(b=>b.addEventListener('click',()=>{
+  ST.acc=b.dataset.acc;
+  document.querySelectorAll('[data-acc]').forEach(x=>x.classList.toggle('on',x===b));
+  refreshRootLabels();
+  render();
+}));
 document.querySelectorAll('[data-q]').forEach(b=>b.addEventListener('click',()=>{ST.q=b.dataset.q;ST.sel=null;document.querySelectorAll('[data-q]').forEach(x=>x.classList.toggle('on',x===b));render();}));
 document.querySelectorAll('[data-set]').forEach(b=>b.addEventListener('click',()=>{ST.set=b.dataset.set;ST.sel=null;document.querySelectorAll('[data-set]').forEach(x=>x.classList.toggle('on',x===b));render();}));
 document.querySelectorAll('[data-t]').forEach(b=>b.addEventListener('click',()=>{const t=b.dataset.t;ST.show[t]=!ST.show[t];b.classList.toggle('on');render();}));
