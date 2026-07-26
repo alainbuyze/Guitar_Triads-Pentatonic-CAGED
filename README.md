@@ -1,6 +1,6 @@
 # Guitar: Triads → Pentatonic Boxes → CAGED
 
-An interactive guitar-fretboard tool that shows how **triads**, **pentatonic boxes**, and the **CAGED system** are the same shapes viewed at different levels of detail — for any root note, in major, minor, augmented, or diminished.
+An interactive guitar-fretboard tool that shows how **triads**, **pentatonic boxes**, and the **CAGED system** are the same shapes viewed at different levels of detail — for any root note, in major, minor, sus2, sus4, augmented, or diminished.
 
 It's a single self-contained `index.html` file: no build step, no dependencies, no network calls. Open it in a browser and it runs.
 
@@ -21,7 +21,7 @@ The core idea: the **triad is the 3-note skeleton**, the **pentatonic box wraps 
 ## Features
 
 - **Root selector** — all 12 chromatic roots.
-- **Quality toggle** — minor, major, augmented, or diminished (switches triad tones, pentatonic, and degree labels). Augmented and diminished triads don't map onto a standard CAGED shape or pentatonic scale, so for those two the pentatonic/CAGED overlay is hidden and only the three inversions (still fully clickable and playable) are shown.
+- **Quality toggle** — minor, major, sus2, sus4, augmented, or diminished (switches triad tones, pentatonic, and degree labels). Sus2 and sus4 are proper subsets of the major/minor pentatonic scale respectively, so they get the full pentatonic-box/CAGED-shape treatment like major and minor. Augmented and diminished don't map onto any standard CAGED shape or pentatonic scale, so for those two the overlay is hidden and only the three inversions (still fully clickable and playable) are shown.
 - **String-set selector** — Top 3 (G-B-e), Middle 3 (D-G-B), A-D-G, Low 3 (E-A-D). Together these surface all five CAGED shapes.
 - **Layer toggles** — pentatonic dots, CAGED shape bars, active box outline, full-chord overlay.
 - **Label modes** — none, scale degrees (`1 b3 4 5 b7` / `1 2 3 5 6`), or note names.
@@ -35,7 +35,7 @@ Everything is computed from music-theory first principles at render time — not
 
 1. **Pentatonic** = scale intervals above the root (`0 3 5 7 10` minor, `0 2 4 7 9` major) mapped onto standard tuning `E A D G B e`.
 2. **Boxes** are built with an anchor-window method: for box *N*, the anchor is the *N*-th pentatonic degree on the low E string, and the box is every pentatonic note within a 4-fret window of that anchor. This reproduces the five standard positions and bounds each box cleanly.
-3. **Triads** are found by brute-force search for compact voicings of the three chord tones on each string set, then each is assigned to the pentatonic box that contains all three of its notes (closest-centered box on boundaries).
+3. **Triads** are found by brute-force search for compact voicings of the three chord tones on each string set, then each is assigned to the widest pentatonic box that contains all three of its notes (falling back to the closest-centered one only among equally-wide candidates, so a genuine box always wins over a sliver left over at the edge of the neck).
 
 ### A note on box numbering in major keys
 

@@ -59,6 +59,8 @@ footer a{color:#64748b}
     <span class="seg">
       <button class="btn mini on" data-q="minor">minor</button>
       <button class="btn mini" data-q="major">major</button>
+      <button class="btn mini" data-q="sus2">sus2</button>
+      <button class="btn mini" data-q="sus4">sus4</button>
       <button class="btn mini" data-q="aug">augmented</button>
       <button class="btn mini" data-q="dim">diminished</button>
     </span>
@@ -120,15 +122,17 @@ const SHAPECOL={'A shape':'#a78bfa','G shape':'#2dd4bf','E shape':'#f43f5e','D s
 const IC={Root:'#fbbf24','1st':'#22c55e','2nd':'#38bdf8'};
 const SETSTR={top:[3,4,5],mid:[2,3,4],s3:[1,2,3],low:[0,1,2]};
 const SETNAME={top:'Top 3 strings (G-B-e)',mid:'Middle 3 strings (D-G-B)',s3:'A-D-G strings',low:'Low 3 strings (E-A-D)'};
+const TRIADIV={minor:[0,3,7],major:[0,4,7],aug:[0,4,8],dim:[0,3,6],sus2:[0,2,7],sus4:[0,5,7]};
 const DEGNAME={minor:{0:'1',3:'b3',5:'4',7:'5',10:'b7'},major:{0:'1',2:'2',4:'3',7:'5',9:'6'},aug:{0:'1',4:'3',8:'#5'},dim:{0:'1',3:'b3',6:'b5'}};
-const QNAME={minor:'minor',major:'major',aug:'augmented',dim:'diminished'};
+DEGNAME.sus2=DEGNAME.major; DEGNAME.sus4=DEGNAME.minor;
+const QNAME={minor:'minor',major:'major',aug:'augmented',dim:'diminished',sus2:'sus2',sus4:'sus4'};
 
-function penta(q){return (q==='minor'||q==='dim')?[0,3,5,7,10]:[0,2,4,7,9];}
-function triadiv(q){return q==='minor'?[0,3,7]:q==='aug'?[0,4,8]:q==='dim'?[0,3,6]:[0,4,7];}
-function hasCagedFramework(q){return q==='minor'||q==='major';}
+function penta(q){return (q==='minor'||q==='dim'||q==='sus4')?[0,3,5,7,10]:[0,2,4,7,9];}
+function triadiv(q){return TRIADIV[q];}
+function hasCagedFramework(q){return q==='minor'||q==='major'||q==='sus2'||q==='sus4';}
 function ivl(s,f,R){return ((OPEN[s]+f-R)%12+12)%12;}
 function isPentaG(s,f,R,q){return penta(q).includes(ivl(s,f,R));}
-function minorRootOf(R,q){return q==='minor'?R:((R-3)%12+12)%12;}
+function minorRootOf(R,q){return (q==='minor'||q==='sus4')?R:((R-3)%12+12)%12;}
 
 function boxCopies(N,R,q){
   const P=penta(q), anchorIv=P[(N-1)%5], out=[];
@@ -162,7 +166,7 @@ function pickBox(tri,copies){
 function enumTriads(setKey,R,q){
   const strs=SETSTR[setKey], ti=triadiv(q).map(x=>(R+x)%12), ts=[...ti].sort((a,b)=>a-b);
   const invMap={}; invMap[ti[0]]='Root';invMap[ti[1]]='1st';invMap[ti[2]]='2nd';
-  const majC=allCopies(R,q), mR=minorRootOf(R,q), minC=(q==='minor')?majC:allCopies(mR,'minor');
+  const majC=allCopies(R,q), mR=minorRootOf(R,q), minC=(q==='minor'||q==='sus4')?majC:allCopies(mR,'minor');
   const out=[];
   for(let a=0;a<16;a++)for(let b=0;b<16;b++)for(let c=0;c<16;c++){
     const combo=[a,b,c], pcs=combo.map((f,i)=>(OPEN[strs[i]]+f)%12), ps=[...pcs].sort((x,y)=>x-y);
@@ -383,7 +387,7 @@ function renderExplain(){
       <b>Click a triad</b> to isolate it, or hit <b>Play</b> on any card to hear it. Red rings mark the <b>root</b>; toggle <b>Labels</b> for scale degrees or note names.`;
     return;
   }
-  const majNote = ST.q==='major' ? `<br><br><b>Major-key note:</b> the pentatonic box number is counted from the shared pentatonic shape (the relative minor, ${NOTE[minorRootOf(ST.root,'major')]} minor), so boxes stay the same as that minor key. The CAGED <b>shape</b> follows the actual ${rn} chord — so in major, box number and shape sit one position apart (e.g. the E-shape barre lives in box 2).` : '';
+  const majNote = (ST.q==='major'||ST.q==='sus2') ? `<br><br><b>${ST.q==='sus2'?'Sus2':'Major'}-key note:</b> the pentatonic box number is counted from the shared pentatonic shape (the relative minor, ${NOTE[minorRootOf(ST.root,'major')]} minor), so boxes stay the same as that minor key. The CAGED <b>shape</b> follows the actual ${rn} ${qn} chord — so here, box number and shape sit one position apart (e.g. the E-shape barre lives in box 2).` : '';
   document.getElementById('explain').innerHTML=
     `<b>${rn} ${qn} · ${SETNAME[ST.set]}.</b> The five CAGED bars up top show every shape across the neck. Change ROOT or QUALITY and the whole system recomputes for that key.
     <br><br>
