@@ -20,7 +20,7 @@ h1{text-align:center;font-size:1.5rem;font-weight:800;background:linear-gradient
 .ctrls button.btn.on{border-color:#22c55e;background:rgba(34,197,94,.14);color:#22c55e}
 .ctrls button.btn.mini{padding:4px 9px;font-size:.72rem}
 .ctrls button.btn.root{padding:4px 0;width:34px;text-align:center}
-.seg{display:inline-flex;border:2px solid #475569;border-radius:20px;overflow:hidden}
+.seg{display:inline-flex;flex-wrap:wrap;max-width:100%;border:2px solid #475569;border-radius:20px;overflow:hidden}
 .seg button.btn{border:none;border-radius:0;margin:0}
 .fbwrap{overflow-x:auto}
 svg{display:block}
@@ -248,7 +248,8 @@ function flashDot(s,f){
 }
 function playNote(s,f){ Synth.pluck(freqOf(s,f)); flashDot(s,f); }
 function dot(x,y,r,fill,txt,txtcol,root,op,s,f){
-  let g=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" opacity="${op}" class="note-dot" data-s="${s}" data-f="${f}"/>`;
+  let g=`<circle cx="${x}" cy="${y}" r="${Math.max(r+5,15)}" fill="transparent" class="note-dot" data-s="${s}" data-f="${f}"/>`;
+  g+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" opacity="${op}" class="note-dot" data-s="${s}" data-f="${f}"/>`;
   if(root) g+=`<circle cx="${x}" cy="${y}" r="${r+2.5}" fill="none" stroke="#ef4444" stroke-width="2.2" opacity="${op}" pointer-events="none"/>`;
   if(txt) g+=`<text x="${x}" y="${y+3}" text-anchor="middle" font-size="${txt.length>1?7.5:8.5}" font-weight="800" fill="${txtcol}" opacity="${op}" pointer-events="none">${txt}</text>`;
   return g;
