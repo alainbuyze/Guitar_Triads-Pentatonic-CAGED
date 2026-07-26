@@ -174,8 +174,12 @@ function whichBox(tri,copies){
 function pickBox(tri,copies){
   const h=whichBox(tri,copies); if(!h.length) return null;
   const c=tri.reduce((a,n)=>a+n[1],0)/tri.length;
-  h.sort((x,y)=>((y.hi-y.lo)-(x.hi-x.lo))||(Math.abs(x.center-c)-Math.abs(y.center-c))||(x.N-y.N));
-  return h[0];
+  // a genuine (unclipped) pentatonic box always spans 3-4 frets; anything narrower is a sliver
+  // left over from a box anchored off the edge of the neck, not a real candidate shape
+  const full=h.filter(x=>(x.hi-x.lo)>=3);
+  const pool=full.length?full:h;
+  pool.sort((x,y)=>(Math.abs(x.center-c)-Math.abs(y.center-c))||(x.N-y.N));
+  return pool[0];
 }
 function enumTriads(setKey,R,q){
   const strs=SETSTR[setKey], ti=triadiv(q).map(x=>(R+x)%12), ts=[...ti].sort((a,b)=>a-b);
