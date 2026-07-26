@@ -1,6 +1,6 @@
 # Guitar: Triads → Pentatonic Boxes → CAGED
 
-An interactive guitar-fretboard tool that shows how **triads**, **pentatonic boxes**, and the **CAGED system** are the same shapes viewed at different levels of detail — for any root note, major or minor.
+An interactive guitar-fretboard tool that shows how **triads**, **pentatonic boxes**, and the **CAGED system** are the same shapes viewed at different levels of detail — for any root note, in major, minor, augmented, or diminished.
 
 It's a single self-contained `index.html` file: no build step, no dependencies, no network calls. Open it in a browser and it runs.
 
@@ -21,7 +21,7 @@ The core idea: the **triad is the 3-note skeleton**, the **pentatonic box wraps 
 ## Features
 
 - **Root selector** — all 12 chromatic roots.
-- **Quality toggle** — minor or major (switches triad tones, pentatonic, and degree labels).
+- **Quality toggle** — minor, major, augmented, or diminished (switches triad tones, pentatonic, and degree labels). Augmented and diminished triads don't map onto a standard CAGED shape or pentatonic scale, so for those two the pentatonic/CAGED overlay is hidden and only the three inversions (still fully clickable and playable) are shown.
 - **String-set selector** — Top 3 (G-B-e), Middle 3 (D-G-B), A-D-G, Low 3 (E-A-D). Together these surface all five CAGED shapes.
 - **Layer toggles** — pentatonic dots, CAGED shape bars, active box outline, full-chord overlay.
 - **Label modes** — none, scale degrees (`1 b3 4 5 b7` / `1 2 3 5 6`), or note names.
