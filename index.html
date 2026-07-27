@@ -131,7 +131,10 @@ function noteName(pc){ return (ST.acc==='flat'?NOTE_FLAT:NOTE)[((pc%12)+12)%12];
 const SHAPE={1:'E shape',2:'D shape',3:'C shape',4:'A shape',5:'G shape'};
 const SHAPECOL={'A shape':'#a78bfa','G shape':'#2dd4bf','E shape':'#f43f5e','D shape':'#f59e0b','C shape':'#38bdf8'};
 // display label only -- color/identity stays keyed on the base SHAPE[N] regardless of quality
-function shapeName(N,q){ return q==='minor' ? SHAPE[N].replace(' shape','m shape') : SHAPE[N]; }
+function shapeName(N,q){
+  const suffix={minor:'m',sus2:'sus2',sus4:'sus4'}[q];
+  return suffix ? SHAPE[N].replace(' shape',suffix+' shape') : SHAPE[N];
+}
 const IC={Root:'#fbbf24','1st':'#22c55e','2nd':'#38bdf8'};
 const SETSTR={top:[3,4,5],mid:[2,3,4],s3:[1,2,3],low:[0,1,2]};
 const SETNAME={top:'Top 3 strings (G-B-e)',mid:'Middle 3 strings (D-G-B)',s3:'A-D-G strings',low:'Low 3 strings (E-A-D)'};
@@ -205,6 +208,23 @@ const SHAPE_TEMPLATES={
     D:[null,{role:'5th',off:0},{role:'root',off:0},{role:'5th',off:2},{role:'root',off:3},{role:'b3',off:1}],
     C:[{role:'5th',off:0},{role:'root',off:0},{role:'b3',off:-2},{role:'5th',off:-3},{role:'root',off:-2},{role:'b3',off:-4}],
     G:[{role:'root',off:0},{role:'b3',off:-2},{role:'5th',off:-3},{role:'root',off:-3},{role:'b3',off:-4},{role:'root',off:0}]
+  },
+  // sus4/sus2: same shapes as major with the 3rd-role string re-pitched -- a 4th is a major 3rd
+  // + 1 semitone (+1 fret), a 2nd is a major 3rd - 2 semitones (-2 frets). Verified against the
+  // real open Asus4/Dsus4/Asus2/Dsus2 fingerings.
+  sus4:{
+    E:[{role:'root',off:0},{role:'5th',off:2},{role:'root',off:2},{role:'4th',off:2},{role:'5th',off:0},{role:'root',off:0}],
+    A:[{role:'5th',off:0},{role:'root',off:0},{role:'5th',off:2},{role:'root',off:2},{role:'4th',off:3},{role:'5th',off:0}],
+    D:[null,{role:'5th',off:0},{role:'root',off:0},{role:'5th',off:2},{role:'root',off:3},{role:'4th',off:3}],
+    C:[{role:'5th',off:0},{role:'root',off:0},{role:'4th',off:0},{role:'5th',off:-3},{role:'root',off:-2},{role:'4th',off:-2}],
+    G:[{role:'root',off:0},{role:'4th',off:0},{role:'5th',off:-3},{role:'root',off:-3},{role:'4th',off:-2},{role:'root',off:0}]
+  },
+  sus2:{
+    E:[{role:'root',off:0},{role:'5th',off:2},{role:'root',off:2},{role:'2nd',off:-1},{role:'5th',off:0},{role:'root',off:0}],
+    A:[{role:'5th',off:0},{role:'root',off:0},{role:'5th',off:2},{role:'root',off:2},{role:'2nd',off:0},{role:'5th',off:0}],
+    D:[null,{role:'5th',off:0},{role:'root',off:0},{role:'5th',off:2},{role:'root',off:3},{role:'2nd',off:0}],
+    C:[{role:'5th',off:0},{role:'root',off:0},{role:'2nd',off:-3},{role:'5th',off:-3},{role:'root',off:-2},{role:'2nd',off:-5}],
+    G:[{role:'root',off:0},{role:'2nd',off:-3},{role:'5th',off:-3},{role:'root',off:-3},{role:'2nd',off:-5},{role:'root',off:0}]
   }
 };
 const SHAPE_NUM={E:1,D:2,C:3,A:4,G:5}; // matches SHAPE={1:'E shape',...} below
@@ -233,19 +253,50 @@ function shapeBounds(name,barre,q){
   const frets=SHAPE_TEMPLATES[q][name].filter(c=>c).map(c=>barre+c.off).filter(f=>f>=0);
   return [Math.min(...frets),Math.max(...frets)];
 }
-// minimal brute-force search (no shape resolution) used only to cross-check sibling string-sets
-// during tie-breaking -- kept separate from enumTriads so that resolving one set's ties can
-// never recursively trigger resolving another's
-function rawTriadsOnly(setKey,R,q){
+// brute-force search for compact (<=4 fret span) closed voicings of a triad's pitch classes.
+// Used directly only for major/minor -- every other quality is *derived* from one of these two
+// (see DERIVE_FROM below) rather than searched for independently, because an independent search
+// can find spurious extra voicings that overlap an adjacent, already-correct one (verified: a
+// "phantom" Csus4 voicing that doesn't correspond to any C-major triad at all, overlapping the
+// genuine one next to it in fret-range) -- something a real player would never treat as a
+// distinct position, since sus/aug/dim/7th-shell shapes are conventionally taught as alterations
+// of the plain triad shapes, not as their own independently-fingered set.
+function bruteTriadNotes(setKey,R,q){
   const strs=SETSTR[setKey], ti=triadiv(q).map(x=>(R+x)%12), ts=[...ti].sort((a,b)=>a-b);
   const out=[];
   for(let a=0;a<16;a++)for(let b=0;b<16;b++)for(let c=0;c<16;c++){
     const combo=[a,b,c], pcs=combo.map((f,i)=>(OPEN[strs[i]]+f)%12), ps=[...pcs].sort((x,y)=>x-y);
     if(ps[0]!==ts[0]||ps[1]!==ts[1]||ps[2]!==ts[2])continue;
     if(Math.max(a,b,c)-Math.min(a,b,c)>4)continue;
-    out.push({notes:combo.map((f,i)=>[strs[i],f])});
+    out.push(combo.map((f,i)=>[strs[i],f]));
   }
   return out;
+}
+// which base triad each altered quality is built from, which of its 3 notes gets re-pitched
+// (index 1 = the "middle" role: 3rd/b3; index 2 = the "top" role: 5th), and by how many
+// semitones/frets -- e.g. a 4th is a major 3rd + 1 semitone, so sus4 shifts index 1 by +1
+const DERIVE_FROM={
+  sus2:{base:'major',alterIdx:1,shift:-2},
+  sus4:{base:'major',alterIdx:1,shift:1},
+  aug:{base:'major',alterIdx:2,shift:1},
+  dim:{base:'minor',alterIdx:2,shift:-1},
+  maj7:{base:'major',alterIdx:2,shift:4},
+  dom7:{base:'major',alterIdx:2,shift:3},
+  min7:{base:'minor',alterIdx:2,shift:3}
+};
+function triadNotesFor(setKey,R,q){
+  const d=DERIVE_FROM[q];
+  if(!d) return bruteTriadNotes(setKey,R,q); // major/minor: the only qualities searched directly
+  const baseIv=((triadiv(d.base)[d.alterIdx])%12+12)%12;
+  return triadNotesFor(setKey,R,d.base)
+    .map(notes=>notes.map(([s,f])=>ivl(s,f,R)===baseIv?[s,f+d.shift]:[s,f]))
+    .filter(notes=>notes.every(([,f])=>f>=0&&f<=20));
+}
+// minimal wrapper (no shape resolution) used only to cross-check sibling string-sets during
+// tie-breaking -- kept separate from enumTriads so that resolving one set's ties can never
+// recursively trigger resolving another's
+function rawTriadsOnly(setKey,R,q){
+  return triadNotesFor(setKey,R,q).map(notes=>({notes}));
 }
 // resolves triads that fit more than one canonical shape: prefer whichever shape a sibling
 // triad (on a different string-set, sharing 2 of the 3 notes -- the same "adjacent voicing"
@@ -283,30 +334,28 @@ function resolveShapeTies(triads,setKey,R,q){
   }
 }
 function enumTriads(setKey,R,q){
-  const strs=SETSTR[setKey], ti=triadiv(q).map(x=>(R+x)%12), ts=[...ti].sort((a,b)=>a-b);
+  const ti=triadiv(q).map(x=>(R+x)%12);
   const invMap={}; invMap[ti[0]]='Root';invMap[ti[1]]='1st';invMap[ti[2]]='2nd';
-  const useTemplates=(q==='major'||q==='minor');
+  const useTemplates=(q==='major'||q==='minor'||q==='sus2'||q==='sus4');
   const majC=useTemplates?null:allCopies(R,q), mR=minorRootOf(R,q);
   const minC=directMinorAnchor(q)?allCopies(R,q):allCopies(mR,'minor'); // Box N numbering always uses the old pentatonic-anchor system
   const out=[];
-  for(let a=0;a<16;a++)for(let b=0;b<16;b++)for(let c=0;c<16;c++){
-    const combo=[a,b,c], pcs=combo.map((f,i)=>(OPEN[strs[i]]+f)%12), ps=[...pcs].sort((x,y)=>x-y);
-    if(ps[0]!==ts[0]||ps[1]!==ts[1]||ps[2]!==ts[2])continue;
-    if(Math.max(a,b,c)-Math.min(a,b,c)>4)continue;
-    const tri=combo.map((f,i)=>[strs[i],f]);
-    const mn=pickBox(tri,minC);
-    const label=strs.map((s,i)=>noteName(OPEN[s]+combo[i])).join('-');
-    const base={notes:tri,inv:invMap[pcs[0]],color:IC[invMap[pcs[0]]],box:mn?mn.N:null,label,frets:combo};
+  for(const notes of triadNotesFor(setKey,R,q)){
+    const pcs=notes.map(([s,f])=>((OPEN[s]+f)%12+12)%12);
+    const frets=notes.map(([,f])=>f);
+    const label=notes.map(([s,f])=>noteName(OPEN[s]+f)).join('-');
+    const mn=pickBox(notes,minC);
+    const base={notes,inv:invMap[pcs[0]],color:IC[invMap[pcs[0]]],box:mn?mn.N:null,label,frets};
     if(useTemplates){
-      base._rawMatches=matchShapes(tri,q);
+      base._rawMatches=matchShapes(notes,q);
     } else {
-      const maj=pickBox(tri,majC), shapeBox=maj?maj.N:null;
+      const maj=pickBox(notes,majC), shapeBox=maj?maj.N:null;
       base.shapeBox=shapeBox; base.zone=shapeBox?SHAPE[shapeBox]:'?'; base.bw=maj?[maj.lo,maj.hi]:null;
     }
     out.push(base);
   }
-  // wide-interval qualities (sus2/sus4/shells) can find two compact arrangements that share
-  // the same bass note, differing only in which upper note sits on top; keep just the tighter one
+  // wide-interval qualities can still occasionally find two compact arrangements sharing the
+  // same bass note, differing only in which upper note sits on top; keep just the tighter one
   const bestByBass=new Map();
   for(const t of out){
     const key=t.inv+'|'+t.frets[0], span=Math.max(...t.frets)-Math.min(...t.frets);
