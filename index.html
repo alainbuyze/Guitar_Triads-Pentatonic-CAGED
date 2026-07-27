@@ -331,8 +331,10 @@ function resolveShapeTies(triads,setKey,R,q){
       chosen=scored[0];
     }
     if(chosen){ t.shapeBox=SHAPE_NUM[chosen.name]; t.zone=shapeName(t.shapeBox,q); t.bw=shapeBounds(chosen.name,chosen.barre,q); t.matchedShape=chosen.name; t.matchedBarre=chosen.barre; }
-    else { t.shapeBox=null; t.zone='?'; t.bw=null; }
-    delete t._rawMatches;
+    // no canonical shape fits, but the triad still lives in a real pentatonic box (shown as
+    // "Box N" on the card) -- outline and fill in that box rather than showing nothing at all
+    else { t.shapeBox=null; t.zone='?'; t.bw=t._boxBw; }
+    delete t._rawMatches; delete t._boxBw;
   }
 }
 function enumTriads(setKey,R,q){
@@ -350,6 +352,7 @@ function enumTriads(setKey,R,q){
     const base={notes,inv:invMap[pcs[0]],color:IC[invMap[pcs[0]]],box:mn?mn.N:null,label,frets};
     if(useTemplates){
       base._rawMatches=matchShapes(notes,q);
+      base._boxBw=mn?[mn.lo,mn.hi]:null; // fallback outline when no canonical shape matches but a pentatonic box still does
     } else {
       const maj=pickBox(notes,majC), shapeBox=maj?maj.N:null;
       base.shapeBox=shapeBox; base.zone=shapeBox?SHAPE[shapeBox]:'?'; base.bw=maj?[maj.lo,maj.hi]:null;
