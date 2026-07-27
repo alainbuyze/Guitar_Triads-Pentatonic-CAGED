@@ -130,6 +130,8 @@ const NOTE_FLAT=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
 function noteName(pc){ return (ST.acc==='flat'?NOTE_FLAT:NOTE)[((pc%12)+12)%12]; }
 const SHAPE={1:'E shape',2:'D shape',3:'C shape',4:'A shape',5:'G shape'};
 const SHAPECOL={'A shape':'#a78bfa','G shape':'#2dd4bf','E shape':'#f43f5e','D shape':'#f59e0b','C shape':'#38bdf8'};
+// display label only -- color/identity stays keyed on the base SHAPE[N] regardless of quality
+function shapeName(N,q){ return q==='minor' ? SHAPE[N].replace(' shape','m shape') : SHAPE[N]; }
 const IC={Root:'#fbbf24','1st':'#22c55e','2nd':'#38bdf8'};
 const SETSTR={top:[3,4,5],mid:[2,3,4],s3:[1,2,3],low:[0,1,2]};
 const SETNAME={top:'Top 3 strings (G-B-e)',mid:'Middle 3 strings (D-G-B)',s3:'A-D-G strings',low:'Low 3 strings (E-A-D)'};
@@ -181,20 +183,127 @@ function pickBox(tri,copies){
   pool.sort((x,y)=>(Math.abs(x.center-c)-Math.abs(y.center-c))||(x.N-y.N));
   return pool[0];
 }
+// Fixed CAGED shape templates (major/minor only) -- derived from the actual real open-chord
+// fingerings (E:022100→[0,2,2,1,0,0] etc.) rather than a generic pentatonic-anchor heuristic.
+// null = string has no defined role in that shape's standard fingering. "off" is the fret
+// offset from the shape's own barre reference (the string where offset=0). A few cells go
+// beyond the strict open-chord form where the extra note is still a genuine, valid chord tone
+// (e.g. barring the low E string together with the A-string root always sounds the 5th) --
+// these fill real gaps (see the C/A/D-shape low-string extension) without inventing anything
+// that isn't harmonically correct.
+const SHAPE_TEMPLATES={
+  major:{
+    E:[{role:'root',off:0},{role:'5th',off:2},{role:'root',off:2},{role:'3rd',off:1},{role:'5th',off:0},{role:'root',off:0}],
+    A:[{role:'5th',off:0},{role:'root',off:0},{role:'5th',off:2},{role:'root',off:2},{role:'3rd',off:2},{role:'5th',off:0}],
+    D:[null,{role:'5th',off:0},{role:'root',off:0},{role:'5th',off:2},{role:'root',off:3},{role:'3rd',off:2}],
+    C:[{role:'5th',off:0},{role:'root',off:0},{role:'3rd',off:-1},{role:'5th',off:-3},{role:'root',off:-2},{role:'3rd',off:-3}],
+    G:[{role:'root',off:0},{role:'3rd',off:-1},{role:'5th',off:-3},{role:'root',off:-3},{role:'3rd',off:-3},{role:'root',off:0}]
+  },
+  minor:{
+    E:[{role:'root',off:0},{role:'5th',off:2},{role:'root',off:2},{role:'b3',off:0},{role:'5th',off:0},{role:'root',off:0}],
+    A:[{role:'5th',off:0},{role:'root',off:0},{role:'5th',off:2},{role:'root',off:2},{role:'b3',off:1},{role:'5th',off:0}],
+    D:[null,{role:'5th',off:0},{role:'root',off:0},{role:'5th',off:2},{role:'root',off:3},{role:'b3',off:1}],
+    C:[{role:'5th',off:0},{role:'root',off:0},{role:'b3',off:-2},{role:'5th',off:-3},{role:'root',off:-2},{role:'b3',off:-4}],
+    G:[{role:'root',off:0},{role:'b3',off:-2},{role:'5th',off:-3},{role:'root',off:-3},{role:'b3',off:-4},{role:'root',off:0}]
+  }
+};
+const SHAPE_NUM={E:1,D:2,C:3,A:4,G:5}; // matches SHAPE={1:'E shape',...} below
+
+// All (shapeName,barre) fingerings that this exact set of (string,fret) notes fits -- purely
+// arithmetic against the fixed templates above, no anchor windows or heuristics involved.
+function matchShapes(notes,q){
+  const tmplSet=SHAPE_TEMPLATES[q]; if(!tmplSet) return [];
+  const out=[];
+  for(const name in tmplSet){
+    const tmpl=tmplSet[name];
+    let barre=null, ok=true;
+    for(const [s,f] of notes){
+      const cell=tmpl[s];
+      if(!cell){ ok=false; break; }
+      const b=f-cell.off;
+      if(barre===null) barre=b; else if(barre!==b){ ok=false; break; }
+    }
+    if(ok && barre!==null && barre>=0) out.push({name,barre});
+  }
+  return out;
+}
+function shapeBounds(name,barre,q){
+  // a string whose template position would fall below fret 0 at this barre isn't actually
+  // reachable here (frets can't go negative), so it doesn't contribute to the box's span
+  const frets=SHAPE_TEMPLATES[q][name].filter(c=>c).map(c=>barre+c.off).filter(f=>f>=0);
+  return [Math.min(...frets),Math.max(...frets)];
+}
+// minimal brute-force search (no shape resolution) used only to cross-check sibling string-sets
+// during tie-breaking -- kept separate from enumTriads so that resolving one set's ties can
+// never recursively trigger resolving another's
+function rawTriadsOnly(setKey,R,q){
+  const strs=SETSTR[setKey], ti=triadiv(q).map(x=>(R+x)%12), ts=[...ti].sort((a,b)=>a-b);
+  const out=[];
+  for(let a=0;a<16;a++)for(let b=0;b<16;b++)for(let c=0;c<16;c++){
+    const combo=[a,b,c], pcs=combo.map((f,i)=>(OPEN[strs[i]]+f)%12), ps=[...pcs].sort((x,y)=>x-y);
+    if(ps[0]!==ts[0]||ps[1]!==ts[1]||ps[2]!==ts[2])continue;
+    if(Math.max(a,b,c)-Math.min(a,b,c)>4)continue;
+    out.push({notes:combo.map((f,i)=>[strs[i],f])});
+  }
+  return out;
+}
+// resolves triads that fit more than one canonical shape: prefer whichever shape a sibling
+// triad (on a different string-set, sharing 2 of the 3 notes -- the same "adjacent voicing"
+// concept fullChord() already relies on) also fits; falls back to the barre closest to the
+// triad's own fret position when no sibling corroborates either candidate
+function resolveShapeTies(triads,setKey,R,q){
+  const needsTiebreak=triads.some(t=>t._rawMatches.length>1);
+  let siblings=[];
+  if(needsTiebreak){
+    for(const os of ['top','mid','s3','low']){
+      if(os===setKey) continue;
+      for(const t of rawTriadsOnly(os,R,q)) siblings.push({notes:t.notes,matches:matchShapes(t.notes,q)});
+    }
+  }
+  for(const t of triads){
+    const cands=t._rawMatches;
+    let chosen=null;
+    if(cands.length===1) chosen=cands[0];
+    else if(cands.length>1){
+      const avgFret=t.notes.reduce((a,n)=>a+n[1],0)/t.notes.length;
+      const scored=cands.map(c=>{
+        let score=0;
+        for(const sib of siblings){
+          const shared=t.notes.filter(([s,f])=>sib.notes.some(([ss,sf])=>ss===s&&sf===f)).length;
+          if(shared>=2 && sib.matches.some(m=>m.name===c.name)) score++;
+        }
+        return {...c,score};
+      });
+      scored.sort((x,y)=>(y.score-x.score)||(Math.abs(x.barre-avgFret)-Math.abs(y.barre-avgFret)));
+      chosen=scored[0];
+    }
+    if(chosen){ t.shapeBox=SHAPE_NUM[chosen.name]; t.zone=shapeName(t.shapeBox,q); t.bw=shapeBounds(chosen.name,chosen.barre,q); t.matchedShape=chosen.name; t.matchedBarre=chosen.barre; }
+    else { t.shapeBox=null; t.zone='?'; t.bw=null; }
+    delete t._rawMatches;
+  }
+}
 function enumTriads(setKey,R,q){
   const strs=SETSTR[setKey], ti=triadiv(q).map(x=>(R+x)%12), ts=[...ti].sort((a,b)=>a-b);
   const invMap={}; invMap[ti[0]]='Root';invMap[ti[1]]='1st';invMap[ti[2]]='2nd';
-  const majC=allCopies(R,q), mR=minorRootOf(R,q), minC=directMinorAnchor(q)?majC:allCopies(mR,'minor');
+  const useTemplates=(q==='major'||q==='minor');
+  const majC=useTemplates?null:allCopies(R,q), mR=minorRootOf(R,q);
+  const minC=directMinorAnchor(q)?allCopies(R,q):allCopies(mR,'minor'); // Box N numbering always uses the old pentatonic-anchor system
   const out=[];
   for(let a=0;a<16;a++)for(let b=0;b<16;b++)for(let c=0;c<16;c++){
     const combo=[a,b,c], pcs=combo.map((f,i)=>(OPEN[strs[i]]+f)%12), ps=[...pcs].sort((x,y)=>x-y);
     if(ps[0]!==ts[0]||ps[1]!==ts[1]||ps[2]!==ts[2])continue;
     if(Math.max(a,b,c)-Math.min(a,b,c)>4)continue;
     const tri=combo.map((f,i)=>[strs[i],f]);
-    const maj=pickBox(tri,majC), mn=pickBox(tri,minC);
-    const shapeBox=maj?maj.N:null;
+    const mn=pickBox(tri,minC);
     const label=strs.map((s,i)=>noteName(OPEN[s]+combo[i])).join('-');
-    out.push({notes:tri,inv:invMap[pcs[0]],color:IC[invMap[pcs[0]]],box:mn?mn.N:null,shapeBox,zone:shapeBox?SHAPE[shapeBox]:'?',bw:maj?[maj.lo,maj.hi]:null,label,frets:combo});
+    const base={notes:tri,inv:invMap[pcs[0]],color:IC[invMap[pcs[0]]],box:mn?mn.N:null,label,frets:combo};
+    if(useTemplates){
+      base._rawMatches=matchShapes(tri,q);
+    } else {
+      const maj=pickBox(tri,majC), shapeBox=maj?maj.N:null;
+      base.shapeBox=shapeBox; base.zone=shapeBox?SHAPE[shapeBox]:'?'; base.bw=maj?[maj.lo,maj.hi]:null;
+    }
+    out.push(base);
   }
   // wide-interval qualities (sus2/sus4/shells) can find two compact arrangements that share
   // the same bass note, differing only in which upper note sits on top; keep just the tighter one
@@ -205,6 +314,7 @@ function enumTriads(setKey,R,q){
   }
   const deduped=[...bestByBass.values()].map(v=>v.t);
   deduped.sort((x,y)=>x.frets[0]-y.frets[0]||x.frets[1]-y.frets[1]);
+  if(useTemplates) resolveShapeTies(deduped,setKey,R,q);
   return deduped;
 }
 
@@ -282,9 +392,25 @@ function dot(x,y,r,fill,txt,txtcol,root,op,s,f){
 }
 function fullChord(tri){
   const map={};tri.notes.forEach(([s,f])=>map[s]=f);
-  // borrow notes from any other string-set's triad that lands in this exact same box (same
-  // shape, same fret window) -- guarantees the full chord agrees with the app's own triads
-  // instead of independently guessing, so adjacent string-sets always tell the same story
+  if(!tri.bw) return tri.notes.map(([s,f])=>[s,f,true]);
+  if(tri.matchedShape){
+    // major/minor with a matched canonical shape: read every string straight off that exact
+    // template+barre. This is the single source of truth (no more borrowing/guessing), so the
+    // same shape always shows the same notes no matter which string-set or octave you're viewing
+    // it from. A string whose position would fall below fret 0 here simply isn't reachable at
+    // this barre, so it's omitted rather than guessed at.
+    const tmpl=SHAPE_TEMPLATES[ST.q][tri.matchedShape], rep=[];
+    for(let s=0;s<6;s++){
+      if(s in map){ rep.push([s,map[s],true]); continue; }
+      const cell=tmpl[s]; if(!cell) continue;
+      const f=tri.matchedBarre+cell.off; if(f<0) continue;
+      rep.push([s,f,false]);
+    }
+    return rep;
+  }
+  // other qualities (sus2/sus4/aug/dim/shells): no fixed template, so borrow notes from any
+  // other string-set's triad that lands in this exact same box, falling back to a nearest-
+  // chord-tone guess only for strings nothing else covers
   const borrowed={};
   for(const setKey of ['top','mid','s3','low']){
     for(const o of enumTriads(setKey,ST.root,ST.q)){
@@ -312,7 +438,7 @@ function render(){
 
   let bars=allCopies(ST.root,ST.q)
     .filter(cp=>cp.lo<=15 && (cp.hi-cp.lo)>=2)
-    .map(cp=>({N:cp.N,lo:cp.lo,hi:Math.min(cp.hi,15),label:SHAPE[cp.N],color:SHAPECOL[SHAPE[cp.N]]}))
+    .map(cp=>({N:cp.N,lo:cp.lo,hi:Math.min(cp.hi,15),label:shapeName(cp.N,ST.q),color:SHAPECOL[SHAPE[cp.N]]}))
     .sort((x,y)=>x.lo-y.lo);
   const rowsEnd=[];
   bars.forEach(bar=>{let r=0;while(rowsEnd[r]!==undefined&&bar.lo<=rowsEnd[r])r++;rowsEnd[r]=bar.hi;bar.row=r;});
